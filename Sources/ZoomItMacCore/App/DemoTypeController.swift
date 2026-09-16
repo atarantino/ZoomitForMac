@@ -45,6 +45,7 @@ final class DemoTypeController {
     private static let maxInputSize = 1_048_576
     private static let minTypingDelayMs = 10
     private static let maxTypingDelayMs = 100
+    private static let maxPauseSeconds = 86_400
     private static let typingVariance = 1.0
     private static let injectedEventMarker: Int64 = 0x5A495444
     private static let endControl = "[end]"
@@ -147,7 +148,10 @@ final class DemoTypeController {
             postKey(keyCode)
         case .pause(let seconds):
             if !userDriven, seconds > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(seconds) * 1_000_000_000)
+                let (nanoseconds, overflow) = UInt64(seconds).multipliedReportingOverflow(by: 1_000_000_000)
+                if !overflow {
+                    try? await Task.sleep(nanoseconds: nanoseconds)
+                }
             }
         case .paste(let string):
             paste(string)
@@ -187,7 +191,7 @@ final class DemoTypeController {
         default:
             if control.hasPrefix("[pause:"), control.hasSuffix("]") {
                 let value = control.dropFirst(7).dropLast()
-                if let seconds = Int(value) {
+                if let seconds = Self.parsePauseSeconds(value) {
                     return (.pause(seconds), afterClose)
                 }
             }
@@ -245,6 +249,14 @@ final class DemoTypeController {
 
     static func cleanForTesting(_ input: String) -> String {
         clean(input)
+    }
+
+    static func pauseSecondsForTesting(_ value: String) -> Int? {
+        parsePauseSeconds(value[...])
+    }
+
+    static func utf16UnitsForTesting(_ string: String) -> [UniChar] {
+        utf16Units(for: string)
     }
 
     static func tokensForTesting(_ input: String) -> [TestToken] {
@@ -354,23 +366,35 @@ final class DemoTypeController {
     }
 
     private static func trimNewline(around control: String, in input: String, trimLeft: Bool, trimRight: Bool) -> String {
-        var output = input
-        var searchStart = output.startIndex
-        while let range = output.range(of: control, range: searchStart..<output.endIndex) {
-            var nextSearchStart = range.upperBound
-            if trimLeft, range.lowerBound > output.startIndex {
-                let previous = output.index(before: range.lowerBound)
-                if output[previous] == "\n" {
-                    output.remove(at: previous)
-                    nextSearchStart = output.index(range.upperBound, offsetBy: -1)
+        var output = ""
+        output.reserveCapacity(input.utf8.count)
+        var searchStart = input.startIndex
+        while let range = input.range(of: control, range: searchStart..<input.endIndex) {
+            var copyEnd = range.lowerBound
+            if trimLeft, range.lowerBound > searchStart {
+                let previous = input.index(before: range.lowerBound)
+                if input[previous] == "\n" {
+                    copyEnd = previous
                 }
             }
-            if trimRight, nextSearchStart < output.endIndex, output[nextSearchStart] == "\n" {
-                output.remove(at: nextSearchStart)
+            output.append(contentsOf: input[searchStart..<copyEnd])
+            output.append(control)
+
+            var nextSearchStart = range.upperBound
+            if trimRight, nextSearchStart < input.endIndex, input[nextSearchStart] == "\n" {
+                nextSearchStart = input.index(after: nextSearchStart)
             }
             searchStart = nextSearchStart
         }
+        output.append(contentsOf: input[searchStart...])
         return output
+    }
+
+    private static func parsePauseSeconds(_ value: Substring) -> Int? {
+        guard let seconds = Int(value), (0...maxPauseSeconds).contains(seconds) else {
+            return nil
+        }
+        return seconds
     }
 
     private func typingDelayMilliseconds(for slider: Int) -> Int {
@@ -523,18 +547,23 @@ final class DemoTypeController {
     }
 
     private func type(_ string: String) {
-        for scalar in string.unicodeScalars {
+        let units = Self.utf16Units(for: string)
+        units.withUnsafeBufferPointer { buffer in
+            guard let baseAddress = buffer.baseAddress else { return }
             let source = CGEventSource(stateID: .combinedSessionState)
             let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
-            var value = UniChar(scalar.value)
-            down?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &value)
+            down?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
             let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-            up?.keyboardSetUnicodeString(stringLength: 1, unicodeString: &value)
+            up?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
             markInjected(down)
             markInjected(up)
             down?.post(tap: .cghidEventTap)
             up?.post(tap: .cghidEventTap)
         }
+    }
+
+    private static func utf16Units(for string: String) -> [UniChar] {
+        Array(string.utf16)
     }
 
     private func postKey(_ keyCode: CGKeyCode) {
