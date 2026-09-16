@@ -172,6 +172,8 @@ cat > "$APP_PATH/Contents/Info.plist" <<PLIST
     <string>$VERSION</string>
     <key>CFBundleVersion</key>
     <string>$BUILD_NUMBER</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>LSUIElement</key>
