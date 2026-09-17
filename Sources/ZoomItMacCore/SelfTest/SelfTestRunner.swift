@@ -430,13 +430,18 @@ public enum SelfTestRunner {
 
     private static func testDemoTypeUnicodeEncoding() throws {
         try expect(
-            DemoTypeController.utf16UnitsForTesting("A") == [0x0041],
+            DemoTypeController.unicodeEventUnitsForTesting("A") == [[0x0041]],
             "Expected BMP DemoType text to encode as one UTF-16 code unit"
         )
         try expect(
-            DemoTypeController.utf16UnitsForTesting("😀") == [0xD83D, 0xDE00],
+            DemoTypeController.unicodeEventUnitsForTesting("😀") == [[0xD83D, 0xDE00]],
             "Expected non-BMP DemoType text to encode as a UTF-16 surrogate pair"
         )
+        let longGrapheme = "e" + String(repeating: "\u{0301}", count: 24)
+        let eventUnits = DemoTypeController.unicodeEventUnitsForTesting(longGrapheme)
+        try expect(eventUnits.count == 25, "Expected one DemoType event per Unicode scalar")
+        try expect(eventUnits.allSatisfy { $0.count <= 2 }, "Expected every DemoType event to remain below the CoreGraphics UTF-16 limit")
+        try expect(eventUnits.flatMap { $0 } == Array(longGrapheme.utf16), "Expected scalar-sized DemoType events to preserve the complete grapheme")
     }
 
     private static func testDemoTypeTypingDelayRange() throws {

@@ -255,8 +255,8 @@ final class DemoTypeController {
         parsePauseSeconds(value[...])
     }
 
-    static func utf16UnitsForTesting(_ string: String) -> [UniChar] {
-        utf16Units(for: string)
+    static func unicodeEventUnitsForTesting(_ string: String) -> [[UniChar]] {
+        unicodeEventUnits(for: string)
     }
 
     static func tokensForTesting(_ input: String) -> [TestToken] {
@@ -547,23 +547,24 @@ final class DemoTypeController {
     }
 
     private func type(_ string: String) {
-        let units = Self.utf16Units(for: string)
-        units.withUnsafeBufferPointer { buffer in
-            guard let baseAddress = buffer.baseAddress else { return }
-            let source = CGEventSource(stateID: .combinedSessionState)
-            let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
-            down?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
-            let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
-            up?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
-            markInjected(down)
-            markInjected(up)
-            down?.post(tap: .cghidEventTap)
-            up?.post(tap: .cghidEventTap)
+        for units in Self.unicodeEventUnits(for: string) {
+            units.withUnsafeBufferPointer { buffer in
+                guard let baseAddress = buffer.baseAddress else { return }
+                let source = CGEventSource(stateID: .combinedSessionState)
+                let down = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: true)
+                down?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
+                let up = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: false)
+                up?.keyboardSetUnicodeString(stringLength: buffer.count, unicodeString: baseAddress)
+                markInjected(down)
+                markInjected(up)
+                down?.post(tap: .cghidEventTap)
+                up?.post(tap: .cghidEventTap)
+            }
         }
     }
 
-    private static func utf16Units(for string: String) -> [UniChar] {
-        Array(string.utf16)
+    private static func unicodeEventUnits(for string: String) -> [[UniChar]] {
+        string.unicodeScalars.map { Array(String($0).utf16) }
     }
 
     private func postKey(_ keyCode: CGKeyCode) {
