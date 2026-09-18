@@ -45,6 +45,8 @@ public enum SelfTestRunner {
         try testDemoTypeSettingsRoundTrip()
         try testDemoTypeScriptCleaningAndTokens()
         try testDemoTypeScriptDecoding()
+        try testDemoTypePauseBounds()
+        try testDemoTypeUnicodeEncoding()
         try testDemoTypeTypingDelayRange()
         try testDemoTypeUserDrivenStepStopsAtEnd()
         #endif
@@ -384,6 +386,19 @@ public enum SelfTestRunner {
     private static func testDemoTypeScriptCleaningAndTokens() throws {
         let cleaned = DemoTypeController.cleanForTesting("\u{0001}\nhello\n[end]\nworld\n[paste]\nchunk\n[/paste]\n[end]\n   ")
         try expect(cleaned == "hello[end]world\n[paste]chunk[/paste][end]", "Unexpected DemoType cleaned script: \(cleaned)")
+        try expect(
+            DemoTypeController.cleanForTesting("hello\n[end]") == "hello[end]",
+            "Expected DemoType cleaning to handle [end] at EOF without reusing a stale String.Index"
+        )
+        try expect(
+            DemoTypeController.cleanForTesting("hello\n[/paste]") == "hello[/paste]",
+            "Expected DemoType cleaning to handle [/paste] at EOF without reusing a stale String.Index"
+        )
+        try expect(
+            DemoTypeController.cleanForTesting(String(repeating: "line\n[end]\n", count: 10_000))
+                == String(repeating: "line[end]", count: 10_000),
+            "Expected repeated DemoType controls to clean correctly"
+        )
 
         let tokens = DemoTypeController.tokensForTesting("a[pause:2][enter][up][down][left][right][paste]hi[/paste][end]")
         try expect(tokens == [
@@ -403,6 +418,30 @@ public enum SelfTestRunner {
         try expect(DemoTypeController.decodeForTesting(Data([0xEF, 0xBB, 0xBF]) + Data("utf8".utf8)) == "utf8", "Expected UTF-8 BOM DemoType text")
         try expect(DemoTypeController.decodeForTesting(Data([0xFF, 0xFE, 0x6C, 0x00, 0x65, 0x00])) == "le", "Expected UTF-16LE DemoType text")
         try expect(DemoTypeController.decodeForTesting(Data([0xFE, 0xFF, 0x00, 0x62, 0x00, 0x65])) == "be", "Expected UTF-16BE DemoType text")
+    }
+
+    private static func testDemoTypePauseBounds() throws {
+        try expect(DemoTypeController.pauseSecondsForTesting("0") == 0, "Expected zero-second DemoType pause to remain valid")
+        try expect(DemoTypeController.pauseSecondsForTesting("86400") == 86_400, "Expected one-day DemoType pause to remain valid")
+        try expect(DemoTypeController.pauseSecondsForTesting("-1") == nil, "Expected negative DemoType pause to be rejected")
+        try expect(DemoTypeController.pauseSecondsForTesting("86401") == nil, "Expected oversized DemoType pause to be rejected")
+        try expect(DemoTypeController.pauseSecondsForTesting("20000000000") == nil, "Expected overflowing DemoType pause to be rejected")
+    }
+
+    private static func testDemoTypeUnicodeEncoding() throws {
+        try expect(
+            DemoTypeController.unicodeEventUnitsForTesting("A") == [[0x0041]],
+            "Expected BMP DemoType text to encode as one UTF-16 code unit"
+        )
+        try expect(
+            DemoTypeController.unicodeEventUnitsForTesting("😀") == [[0xD83D, 0xDE00]],
+            "Expected non-BMP DemoType text to encode as a UTF-16 surrogate pair"
+        )
+        let longGrapheme = "e" + String(repeating: "\u{0301}", count: 24)
+        let eventUnits = DemoTypeController.unicodeEventUnitsForTesting(longGrapheme)
+        try expect(eventUnits.count == 25, "Expected one DemoType event per Unicode scalar")
+        try expect(eventUnits.allSatisfy { $0.count <= 2 }, "Expected every DemoType event to remain below the CoreGraphics UTF-16 limit")
+        try expect(eventUnits.flatMap { $0 } == Array(longGrapheme.utf16), "Expected scalar-sized DemoType events to preserve the complete grapheme")
     }
 
     private static func testDemoTypeTypingDelayRange() throws {
