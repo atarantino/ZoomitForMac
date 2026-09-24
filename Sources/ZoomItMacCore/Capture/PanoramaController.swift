@@ -63,7 +63,9 @@ final class PanoramaController {
     private var escapeLocalMonitor: Any?
     /// True from the moment a panorama is initiated (region selection) until it
     /// finishes, so a second trigger can't stack a new selection.
-    private var isActive = false
+    /// True from region selection through stitching; panorama handles Escape
+    /// for this whole period.
+    private(set) var isActive = false
     private var onStateChange: ((Bool) -> Void)?
     /// Called right before the Save dialog is shown so any obscuring overlay can
     /// be dismissed first.

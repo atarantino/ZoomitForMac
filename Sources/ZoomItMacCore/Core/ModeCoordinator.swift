@@ -45,18 +45,44 @@ final class ModeCoordinator {
     private lazy var demoTypeController = DemoTypeController(settingsStore: settingsStore)
     #endif
     /// Drives the full-screen break timer (Control+3).
-    private lazy var breakTimerController = BreakTimerController(
-        displayManager: displayManager,
-        captureService: captureService,
-        settingsStore: settingsStore,
-        userSelectedResourceAccess: userSelectedResourceAccess
-    )
+    private lazy var breakTimerController: BreakTimerController = {
+        let controller = BreakTimerController(
+            displayManager: displayManager,
+            captureService: captureService,
+            settingsStore: settingsStore,
+            userSelectedResourceAccess: userSelectedResourceAccess
+        )
+        // Keep the laser pointer out of the faded-desktop background.
+        controller.excludedWindowNumbers = { [weak self] in
+            self?.laserPointerController.windowNumberForScreenCaptureExclusion.map { [$0] } ?? []
+        }
+        return controller
+    }()
     /// Drives DemoMirror (Control+9 / Shift for a region / Option for a window).
     private lazy var demoMirrorController = DemoMirrorController(
         displayManager: displayManager,
         permissionService: permissionService,
         settingsStore: settingsStore
     )
+    /// Drives the laser pointer (Control+0).
+    private lazy var laserPointerController: LaserPointerController = {
+        let controller = LaserPointerController(settingsStore: settingsStore)
+        controller.shouldHandleEscape = { [weak self] in
+            guard let self else { return true }
+            return Self.escapeTurnsOffLaserPointer(
+                mode: self.mode,
+                isSnipping: self.isSnipping,
+                isPanoramaActive: self.panoramaController.isActive
+            )
+        }
+        controller.prepareToShow = { @MainActor [weak self] in
+            // A running live zoom must stop capturing the new laser window, or
+            // it magnifies a copy of the dot under the real one.
+            guard let self, let session = self.liveCaptureSession else { return }
+            try? await session.updateExcludedWindows(self.liveZoomExcludedWindowNumbers())
+        }
+        return controller
+    }()
     /// Notified when recording starts/stops so the UI (menu-bar icon) can react.
     var onRecordingStateChanged: ((Bool) -> Void)?
     /// Invoked when live zoom starts/stops so global Control+Up/Down zoom
@@ -145,6 +171,8 @@ final class ModeCoordinator {
             toggleBreakTimer()
         case .toggleDemoMirror(let scope):
             demoMirrorController.toggle(scope: scope)
+        case .toggleLaserPointer:
+            laserPointerController.toggle()
         case .setTool(let tool):
             annotationController.currentTool = tool
         case .setColor(let color):
@@ -177,6 +205,40 @@ final class ModeCoordinator {
             saveCurrentTypingFontSize()
             overlayController.requestRedraw()
         }
+    }
+
+    /// Crops a full-display recording frame to a region recording's
+    /// `sourceRect` (display points, top-left origin), matching
+    /// ZoomCanvasView.captureRecordingImage.
+    static func cropRecordingFrame(_ image: CGImage, to sourceRect: CGRect?, pointWidth: CGFloat) -> CGImage? {
+        guard let sourceRect, pointWidth > 0 else { return image }
+        let scale = CGFloat(image.width) / pointWidth
+        let pixelRect = CGRect(
+            x: sourceRect.minX * scale,
+            y: sourceRect.minY * scale,
+            width: sourceRect.width * scale,
+            height: sourceRect.height * scale
+        ).integral
+        return image.cropping(to: pixelRect)
+    }
+
+    /// Escape turns the laser pointer off unless a ZoomIt mode that uses
+    /// Escape itself is on screen; then Escape exits that mode and the laser
+    /// stays on.
+    static func escapeTurnsOffLaserPointer(mode: AppMode, isSnipping: Bool, isPanoramaActive: Bool) -> Bool {
+        guard !isSnipping, !isPanoramaActive else { return false }
+        return mode == .idle || mode == .recording
+    }
+
+    /// ZoomIt windows live zoom leaves out of its source capture: the overlay
+    /// itself (to prevent feedback), the webcam PiP when recording, and the
+    /// laser pointer, which stays live on top of the magnified image.
+    private func liveZoomExcludedWindowNumbers() -> [Int] {
+        [
+            overlayController.overlayWindowNumber,
+            recordingController.webcamWindowNumberForScreenCaptureExclusion,
+            laserPointerController.windowNumberForScreenCaptureExclusion
+        ].compactMap { $0 }
     }
 
     private func saveCurrentTypingFontSize() {
@@ -280,11 +342,7 @@ final class ModeCoordinator {
                     self.overlayController.updateLiveImage(image)
                 }
                 liveCaptureSession = session
-                let excludedWindowNumbers = [
-                    overlayController.overlayWindowNumber,
-                    recordingController.webcamWindowNumberForScreenCaptureExclusion
-                ].compactMap { $0 }
-                try await session.start(display: display, excludingWindowNumbers: excludedWindowNumbers)
+                try await session.start(display: display, excludingWindowNumbers: liveZoomExcludedWindowNumbers())
 
                 // Enable Control+Up/Down zoom while live zoom is on screen.
                 onBeginLiveZoomNavigation?()
@@ -401,7 +459,12 @@ final class ModeCoordinator {
     }
 
     private func captureDisplayForOverlay(_ display: DisplayDescriptor) async throws -> CapturedFrame {
-        let excludedWindowNumbers = recordingController.webcamWindowNumberForScreenCaptureExclusion.map { [$0] } ?? []
+        // Leave the webcam PiP and the laser pointer out of the frozen image;
+        // both stay live on top of the zoom overlay.
+        let excludedWindowNumbers = [
+            recordingController.webcamWindowNumberForScreenCaptureExclusion,
+            laserPointerController.windowNumberForScreenCaptureExclusion
+        ].compactMap { $0 }
         return try await captureService.captureDisplay(display, excludingWindowNumbers: excludedWindowNumbers)
     }
 
@@ -464,7 +527,16 @@ final class ModeCoordinator {
         // Make sure the Save dialog (shown after stopping) isn't hidden behind a
         // zoom overlay by dismissing any active overlay first.
         recordingController.overlayFrameProvider = { [weak self] sourceRect in
-            self?.overlayController.captureFrameForRecording(sourceRect: sourceRect)
+            guard let self else { return nil }
+            // The recorder encodes ZoomIt's rendered canvas while zoom or draw is
+            // up, so add the laser pointer to that frame before the region crop.
+            guard self.laserPointerController.isActive,
+                  let screenFrame = self.overlayController.overlayScreenFrame,
+                  let fullImage = self.overlayController.captureFrameForRecording(sourceRect: nil),
+                  let composited = self.laserPointerController.compositeForRecording(onto: fullImage, imageScreenFrame: screenFrame) else {
+                return self.overlayController.captureFrameForRecording(sourceRect: sourceRect)
+            }
+            return Self.cropRecordingFrame(composited, to: sourceRect, pointWidth: screenFrame.width)
         }
         recordingController.onWillShowSaveDialog = { [weak self] in
             self?.overlayController.prepareForPresentedWindow()

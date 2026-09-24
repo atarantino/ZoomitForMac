@@ -180,6 +180,7 @@ public final class AppDelegate: NSObject, NSApplicationDelegate {
             StatusMenuEntry(title: "Record Screen", action: #selector(AppController.toggleRecording), keyEquivalent: ""),
             StatusMenuEntry(title: "Panorama Capture", action: #selector(AppController.startPanorama), keyEquivalent: ""),
             StatusMenuEntry(title: "DemoMirror", action: #selector(AppController.toggleDemoMirror), keyEquivalent: ""),
+            StatusMenuEntry(title: "Laser Pointer", action: #selector(AppController.toggleLaserPointer), keyEquivalent: ""),
             StatusMenuEntry(title: "Break Timer", action: #selector(AppController.toggleBreakTimer), keyEquivalent: ""),
             .separator,
             StatusMenuEntry(title: "Check Permissions", action: #selector(AppController.checkPermissions), keyEquivalent: ""),

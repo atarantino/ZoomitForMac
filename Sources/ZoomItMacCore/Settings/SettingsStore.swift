@@ -67,6 +67,18 @@ struct AppSettings: Equatable {
     /// hotkey.
     var breakHotKeyCode: Int
     var breakHotKeyModifiers: UInt
+    /// Virtual key code and modifier-flag raw value for the global laser
+    /// pointer hotkey. A key code of 0 disables the hotkey.
+    var laserPointerHotKeyCode: Int
+    var laserPointerHotKeyModifiers: UInt
+    /// Laser pointer dot color as a 0xRRGGBB value.
+    var laserPointerColorRGB: UInt32
+    /// How long the laser pointer's fading trail lasts, in milliseconds.
+    /// 0 turns the trail off.
+    var laserPointerTrailMilliseconds: Int
+    /// Minutes without mouse movement after which the laser pointer turns
+    /// itself off. 0 keeps it on until the hotkey is pressed again.
+    var laserPointerIdleMinutes: Int
     /// Break timer duration in whole minutes, matching ZoomIt's options dialog.
     var breakDurationMinutes: Int
     /// Break timer text and solid background colors as 0xRRGGBB values.
@@ -168,6 +180,12 @@ struct AppSettings: Equatable {
         // Control+3 (kVK_ANSI_3 = 20) toggles the break timer.
         breakHotKeyCode: 20,
         breakHotKeyModifiers: 1 << 18,
+        // Control+0 (kVK_ANSI_0 = 29) toggles the laser pointer.
+        laserPointerHotKeyCode: 29,
+        laserPointerHotKeyModifiers: 1 << 18,
+        laserPointerColorRGB: 0xFF0000,
+        laserPointerTrailMilliseconds: 350,
+        laserPointerIdleMinutes: 5,
         breakDurationMinutes: 10,
         breakTextColorRGB: 0xFF0000,
         breakBackgroundColorRGB: 0xFFFFFF,
@@ -234,6 +252,11 @@ final class UserDefaultsSettingsStore: SettingsStore {
         static let demoMirrorTrackWindowRegion = "demoMirrorTrackWindowRegion"
         static let breakHotKeyCode = "breakHotKeyCode"
         static let breakHotKeyModifiers = "breakHotKeyModifiers"
+        static let laserPointerHotKeyCode = "laserPointerHotKeyCode"
+        static let laserPointerHotKeyModifiers = "laserPointerHotKeyModifiers"
+        static let laserPointerColorRGB = "laserPointerColorRGB"
+        static let laserPointerTrailMilliseconds = "laserPointerTrailMilliseconds"
+        static let laserPointerIdleMinutes = "laserPointerIdleMinutes"
         static let breakDurationMinutes = "breakDurationMinutes"
         static let breakTextColorRGB = "breakTextColorRGB"
         static let breakBackgroundColorRGB = "breakBackgroundColorRGB"
@@ -435,6 +458,26 @@ final class UserDefaultsSettingsStore: SettingsStore {
             settings.breakDurationMinutes = defaults.integer(forKey: Key.breakDurationMinutes)
         }
 
+        if defaults.object(forKey: Key.laserPointerHotKeyCode) != nil {
+            settings.laserPointerHotKeyCode = defaults.integer(forKey: Key.laserPointerHotKeyCode)
+        }
+
+        if defaults.object(forKey: Key.laserPointerHotKeyModifiers) != nil {
+            settings.laserPointerHotKeyModifiers = UInt(bitPattern: defaults.integer(forKey: Key.laserPointerHotKeyModifiers))
+        }
+
+        if defaults.object(forKey: Key.laserPointerColorRGB) != nil {
+            settings.laserPointerColorRGB = UInt32(defaults.integer(forKey: Key.laserPointerColorRGB))
+        }
+
+        if defaults.object(forKey: Key.laserPointerTrailMilliseconds) != nil {
+            settings.laserPointerTrailMilliseconds = defaults.integer(forKey: Key.laserPointerTrailMilliseconds)
+        }
+
+        if defaults.object(forKey: Key.laserPointerIdleMinutes) != nil {
+            settings.laserPointerIdleMinutes = defaults.integer(forKey: Key.laserPointerIdleMinutes)
+        }
+
         if defaults.object(forKey: Key.breakTextColorRGB) != nil {
             settings.breakTextColorRGB = UInt32(defaults.integer(forKey: Key.breakTextColorRGB))
         }
@@ -560,6 +603,11 @@ final class UserDefaultsSettingsStore: SettingsStore {
         defaults.set(settings.demoMirrorTrackWindowRegion, forKey: Key.demoMirrorTrackWindowRegion)
         defaults.set(settings.breakHotKeyCode, forKey: Key.breakHotKeyCode)
         defaults.set(Int(bitPattern: settings.breakHotKeyModifiers), forKey: Key.breakHotKeyModifiers)
+        defaults.set(settings.laserPointerHotKeyCode, forKey: Key.laserPointerHotKeyCode)
+        defaults.set(Int(bitPattern: settings.laserPointerHotKeyModifiers), forKey: Key.laserPointerHotKeyModifiers)
+        defaults.set(Int(settings.laserPointerColorRGB), forKey: Key.laserPointerColorRGB)
+        defaults.set(settings.laserPointerTrailMilliseconds, forKey: Key.laserPointerTrailMilliseconds)
+        defaults.set(settings.laserPointerIdleMinutes, forKey: Key.laserPointerIdleMinutes)
         defaults.set(settings.breakDurationMinutes, forKey: Key.breakDurationMinutes)
         defaults.set(Int(settings.breakTextColorRGB), forKey: Key.breakTextColorRGB)
         defaults.set(Int(settings.breakBackgroundColorRGB), forKey: Key.breakBackgroundColorRGB)

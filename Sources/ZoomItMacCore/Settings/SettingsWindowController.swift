@@ -95,6 +95,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         #endif
         case panorama
         case demoMirror
+        case laserPointer
     }
     private weak var hotKeyButton: NSButton?
     private weak var drawHotKeyButton: NSButton?
@@ -109,6 +110,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
     private weak var panoramaHotKeyButton: NSButton?
     private weak var demoMirrorHotKeyButton: NSButton?
     private weak var demoMirrorTrackWindowCheckbox: NSButton?
+    private weak var laserPointerHotKeyButton: NSButton?
+    private weak var laserPointerEscapeStatusLabel: NSTextField?
+    private weak var laserPointerEscapeSettingsButton: NSButton?
     private var hotKeyMonitor: Any?
     private var recordingTarget: HotKeyTarget?
 
@@ -155,7 +159,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         #endif
         panoramaHotKeyButton?.title = panoramaHotKeyDisplayString()
         demoMirrorHotKeyButton?.title = demoMirrorHotKeyDisplayString()
+        laserPointerHotKeyButton?.title = laserPointerHotKeyDisplayString()
         launchAtLoginCheckbox?.state = settings.launchAtLogin ? .on : .off
+        updateLaserPointerEscapeStatus()
         NSApp.activate(ignoringOtherApps: true)
         window.center()
         window.makeKeyAndOrderFront(nil)
@@ -176,7 +182,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         #if !ZOOMIT_APP_STORE
         titles.append("DemoType")
         #endif
-        titles.append(contentsOf: ["Break", "Snip", "Record", "Panorama", "DemoMirror"])
+        titles.append(contentsOf: ["Break", "Snip", "Record", "Panorama", "DemoMirror", "Laser Pointer"])
         return titles
     }
 
@@ -195,6 +201,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         case "Record": return makeRecordTab()
         case "Panorama": return makePanoramaTab()
         case "DemoMirror": return makeDemoMirrorTab()
+        case "Laser Pointer": return makeLaserPointerTab()
         default: return NSView()
         }
     }
@@ -398,6 +405,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         case "Record": return "record.circle"
         case "Panorama": return "pano"
         case "DemoMirror": return "rectangle.on.rectangle"
+        case "Laser Pointer": return "cursorarrow.rays"
         default: return "square"
         }
     }
@@ -742,6 +750,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         beginRecording(target: .demoMirror, sender: sender)
     }
 
+    @objc private func toggleLaserPointerHotKeyRecording(_ sender: NSButton) {
+        beginRecording(target: .laserPointer, sender: sender)
+    }
+
     private func beginRecording(target: HotKeyTarget, sender: NSButton) {
         if recordingTarget != nil {
             // A recording is already in progress; clicking any recorder stops it.
@@ -784,7 +796,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithLive(code: newCode, modifiers: newModifiers) ||
                 conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -795,7 +808,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithLive(code: newCode, modifiers: newModifiers) ||
                 conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -806,7 +820,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithDraw(code: newCode, modifiers: newModifiers) ||
                 conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -820,7 +835,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithRecord(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
                 conflictsWithPanorama(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -832,7 +848,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithLive(code: newCode, modifiers: newModifiers) ||
                 conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -845,7 +862,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
                 conflictsWithSnip(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -857,7 +875,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithLive(code: newCode, modifiers: newModifiers) ||
                 conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -873,7 +892,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithSnipOcr(code: newCode, modifiers: newModifiers) ||
                 conflictsWithRecord(code: newCode, modifiers: newModifiers) ||
                 conflictsWithPanorama(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -886,7 +906,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithLive(code: newCode, modifiers: newModifiers) ||
                 conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
@@ -901,12 +922,29 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
                 conflictsWithSnipOcr(code: newCode, modifiers: newModifiers) ||
                 conflictsWithRecord(code: newCode, modifiers: newModifiers) ||
                 conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
-                conflictsWithPanorama(code: newCode, modifiers: newModifiers) {
+                conflictsWithPanorama(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLaserPointer(code: newCode, modifiers: newModifiers) {
                 NSSound.beep()
                 return nil
             }
             settings.demoMirrorHotKeyCode = newCode
             settings.demoMirrorHotKeyModifiers = newModifiers
+        case .laserPointer:
+            if conflictsWithZoom(code: newCode, modifiers: newModifiers) ||
+                conflictsWithDraw(code: newCode, modifiers: newModifiers) ||
+                conflictsWithLive(code: newCode, modifiers: newModifiers) ||
+                conflictsWithBreak(code: newCode, modifiers: newModifiers) ||
+                conflictsWithSnip(code: newCode, modifiers: newModifiers) ||
+                conflictsWithSnipOcr(code: newCode, modifiers: newModifiers) ||
+                conflictsWithRecord(code: newCode, modifiers: newModifiers) ||
+                conflictsWithDemoType(code: newCode, modifiers: newModifiers) ||
+                conflictsWithPanorama(code: newCode, modifiers: newModifiers) ||
+                conflictsWithDemoMirror(code: newCode, modifiers: newModifiers) {
+                NSSound.beep()
+                return nil
+            }
+            settings.laserPointerHotKeyCode = newCode
+            settings.laserPointerHotKeyModifiers = newModifiers
         case nil:
             return nil
         }
@@ -962,6 +1000,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         code == settings.demoMirrorHotKeyCode && modifiers == settings.demoMirrorHotKeyModifiers
     }
 
+    private func conflictsWithLaserPointer(code: Int, modifiers: UInt) -> Bool {
+        settings.laserPointerHotKeyCode != 0 &&
+            code == settings.laserPointerHotKeyCode && modifiers == settings.laserPointerHotKeyModifiers
+    }
+
     private func finishRecording() {
         // Resume the global hotkeys only if a capture was actually in progress,
         // keeping the suspend/resume balanced no matter how recording ends
@@ -987,6 +1030,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         #endif
         panoramaHotKeyButton?.title = panoramaHotKeyDisplayString()
         demoMirrorHotKeyButton?.title = demoMirrorHotKeyDisplayString()
+        laserPointerHotKeyButton?.title = laserPointerHotKeyDisplayString()
     }
 
     private func zoomHotKeyDisplayString() -> String {
@@ -999,6 +1043,10 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
 
     private func liveHotKeyDisplayString() -> String {
         Self.describe(keyCode: settings.liveHotKeyCode, modifiers: NSEvent.ModifierFlags(rawValue: settings.liveHotKeyModifiers))
+    }
+
+    private func laserPointerHotKeyDisplayString() -> String {
+        Self.describe(keyCode: settings.laserPointerHotKeyCode, modifiers: NSEvent.ModifierFlags(rawValue: settings.laserPointerHotKeyModifiers))
     }
 
     private func breakHotKeyDisplayString() -> String {
@@ -1528,6 +1576,123 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
 
     @objc private func demoMirrorTrackWindowChanged(_ sender: NSButton) {
         settings.demoMirrorTrackWindowRegion = (sender.state == .on)
+        persist()
+    }
+
+    // MARK: - Laser Pointer tab
+
+    private func makeLaserPointerTab() -> NSView {
+        let help = makeLabel(
+            "The laser pointer draws a glowing dot at the mouse pointer so an audience can follow it. It works over any app, while zoomed in, and while drawing, and it shows in screen recordings and screen sharing. Clicks pass through to the app underneath.",
+            wraps: true
+        )
+
+        let shortcutHelp = makeLabel(
+            "Enter the hotkey to turn the laser pointer on. Enter it again, or press Esc, to turn it off. While zoomed in or drawing, Esc exits zoom or drawing first and the laser pointer stays on.",
+            wraps: true
+        )
+
+        let laserPointerHotKeyButton = NSButton(title: laserPointerHotKeyDisplayString(), target: self, action: #selector(toggleLaserPointerHotKeyRecording(_:)))
+        laserPointerHotKeyButton.bezelStyle = .rounded
+        laserPointerHotKeyButton.setButtonType(.momentaryPushIn)
+        laserPointerHotKeyButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 140).isActive = true
+        self.laserPointerHotKeyButton = laserPointerHotKeyButton
+
+        let colorPopup = makeColorPopup(selected: settings.laserPointerColorRGB, action: #selector(laserPointerColorChanged(_:)))
+        let trailPopup = makeLaserPointerPopup(
+            options: Self.laserPointerTrailOptions,
+            selected: settings.laserPointerTrailMilliseconds,
+            action: #selector(laserPointerTrailChanged(_:))
+        )
+        let idlePopup = makeLaserPointerPopup(
+            options: Self.laserPointerIdleOptions,
+            selected: settings.laserPointerIdleMinutes,
+            action: #selector(laserPointerIdleChanged(_:))
+        )
+
+        let grid = makeFormGrid([
+            [makeLabel("Laser Pointer Toggle:"), laserPointerHotKeyButton],
+            [makeLabel("Color:"), colorPopup],
+            [makeLabel("Trail:"), trailPopup],
+            [makeLabel("Turn off after:"), idlePopup]
+        ])
+
+        let idleHelp = makeLabel(
+            "The laser pointer turns itself off when the mouse hasn't moved for the chosen time, so it isn't left on after a presentation.",
+            wraps: true
+        )
+
+        let escapeStatus = makeLabel("", wraps: true)
+        laserPointerEscapeStatusLabel = escapeStatus
+        let escapeSettingsButton = NSButton(title: "Open Input Monitoring Settings…", target: self, action: #selector(openInputMonitoringSettings(_:)))
+        escapeSettingsButton.bezelStyle = .rounded
+        laserPointerEscapeSettingsButton = escapeSettingsButton
+        updateLaserPointerEscapeStatus()
+
+        let rows: [NSView] = [help, shortcutHelp, grid, idleHelp, escapeStatus, escapeSettingsButton]
+        return makeColumn(rows)
+    }
+
+    /// Trail lengths in milliseconds; 0 turns the trail off.
+    private static let laserPointerTrailOptions: [(name: String, value: Int)] = [
+        ("Off", 0),
+        ("Short", 200),
+        ("Medium", 350),
+        ("Long", 600)
+    ]
+
+    /// Idle auto-off delays in minutes; 0 never turns the pointer off.
+    private static let laserPointerIdleOptions: [(name: String, value: Int)] = [
+        ("Never", 0),
+        ("1 minute of no movement", 1),
+        ("2 minutes of no movement", 2),
+        ("5 minutes of no movement", 5),
+        ("10 minutes of no movement", 10),
+        ("15 minutes of no movement", 15)
+    ]
+
+    private func makeLaserPointerPopup(options: [(name: String, value: Int)], selected: Int, action: Selector) -> NSPopUpButton {
+        let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+        popup.translatesAutoresizingMaskIntoConstraints = false
+        for option in options {
+            popup.addItem(withTitle: option.name)
+            popup.lastItem?.representedObject = option.value
+        }
+        popup.selectItem(at: options.firstIndex { $0.value == selected } ?? 0)
+        popup.target = self
+        popup.action = action
+        return popup
+    }
+
+    @objc private func laserPointerColorChanged(_ sender: NSPopUpButton) {
+        settings.laserPointerColorRGB = UInt32((sender.selectedItem?.representedObject as? Int) ?? Int(settings.laserPointerColorRGB))
+        persist()
+    }
+
+    @objc private func laserPointerTrailChanged(_ sender: NSPopUpButton) {
+        settings.laserPointerTrailMilliseconds = (sender.selectedItem?.representedObject as? Int) ?? settings.laserPointerTrailMilliseconds
+        persist()
+    }
+
+    /// Esc can turn the laser pointer off over other apps only with Input
+    /// Monitoring permission, so show whether ZoomIt has it.
+    private func updateLaserPointerEscapeStatus() {
+        let granted = CGPreflightListenEventAccess()
+        laserPointerEscapeStatusLabel?.stringValue = granted
+            ? "Esc turns the laser pointer off in any app."
+            : "To let Esc turn the laser pointer off while another app is in front, allow ZoomIt in System Settings > Privacy & Security > Input Monitoring. Without it, use the hotkey."
+        laserPointerEscapeSettingsButton?.isHidden = granted
+    }
+
+    @objc private func openInputMonitoringSettings(_ sender: NSButton) {
+        CGRequestListenEventAccess()
+        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    @objc private func laserPointerIdleChanged(_ sender: NSPopUpButton) {
+        settings.laserPointerIdleMinutes = (sender.selectedItem?.representedObject as? Int) ?? settings.laserPointerIdleMinutes
         persist()
     }
 

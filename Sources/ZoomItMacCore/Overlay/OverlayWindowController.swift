@@ -146,6 +146,9 @@ final class OverlayWindowController {
     /// so the magnified overlay is never captured back into itself.
     var overlayWindowNumber: Int? { window?.windowNumber }
 
+    /// The overlay's frame in AppKit screen coordinates (the display it covers).
+    var overlayScreenFrame: CGRect? { window?.frame }
+
     /// Renders the overlay exactly as ZoomIt shows it so the recorder can encode
     /// zoom/drawing even when ScreenCaptureKit omits our own windows.
     func captureFrameForRecording(sourceRect: CGRect?) -> CGImage? {

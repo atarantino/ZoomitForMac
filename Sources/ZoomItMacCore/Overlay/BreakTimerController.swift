@@ -81,6 +81,8 @@ final class BreakTimerController {
     private var window: NSWindow?
     private weak var timerView: BreakTimerView?
     private var onFinished: (() -> Void)?
+    /// ZoomIt windows to leave out of the faded-desktop background capture.
+    var excludedWindowNumbers: () -> [Int] = { [] }
     /// Keeps the display awake / screen saver suppressed while the break timer
     /// is on screen, matching Windows ZoomIt.
     private let idleSleepAssertion = IdleSleepAssertion()
@@ -172,7 +174,7 @@ final class BreakTimerController {
     private func makeBackgroundImage(settings: AppSettings, display: DisplayDescriptor) async throws -> NSImage? {
         switch settings.breakBackgroundMode {
         case 1:
-            let frame = try await captureService.captureDisplay(display)
+            let frame = try await captureService.captureDisplay(display, excludingWindowNumbers: excludedWindowNumbers())
             let image = NSImage(cgImage: frame.image, size: display.frame.size)
             image.isTemplate = false
             return image

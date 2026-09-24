@@ -23,6 +23,7 @@ final class HotkeyService {
     private var demoMirrorRegionHotKeyRef: EventHotKeyRef?
     private var demoMirrorWindowHotKeyRef: EventHotKeyRef?
     private var breakHotKeyRef: EventHotKeyRef?
+    private var laserPointerHotKeyRef: EventHotKeyRef?
     private var zoomInNavRef: EventHotKeyRef?
     private var zoomOutNavRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
@@ -141,6 +142,7 @@ final class HotkeyService {
                 case 16: command = .toggleDemoMirror(scope: .screen)
                 case 17: command = .toggleDemoMirror(scope: .region)
                 case 18: command = .toggleDemoMirror(scope: .window)
+                case 19: command = .toggleLaserPointer
                 default: return noErr
                 }
 
@@ -340,6 +342,20 @@ final class HotkeyService {
             0,
             &demoMirrorWindowHotKeyRef
         )
+
+        // Laser pointer: toggles a glowing dot at the mouse pointer. A key code
+        // of 0 disables the hotkey.
+        if settings.laserPointerHotKeyCode != 0 {
+            let laserPointerModifiers = NSEvent.ModifierFlags(rawValue: settings.laserPointerHotKeyModifiers)
+            RegisterEventHotKey(
+                UInt32(settings.laserPointerHotKeyCode),
+                carbonModifiers(from: laserPointerModifiers),
+                EventHotKeyID(signature: signature, id: 19),
+                target,
+                0,
+                &laserPointerHotKeyRef
+            )
+        }
     }
 
     private func unregisterHotKey() {
@@ -409,6 +425,10 @@ final class HotkeyService {
             UnregisterEventHotKey(breakHotKeyRef)
         }
         breakHotKeyRef = nil
+        if let laserPointerHotKeyRef {
+            UnregisterEventHotKey(laserPointerHotKeyRef)
+        }
+        laserPointerHotKeyRef = nil
     }
 
     private func carbonModifiers(from flags: NSEvent.ModifierFlags) -> UInt32 {

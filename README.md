@@ -32,6 +32,7 @@ brew uninstall --cask zoomit
 - Pen, line, rectangle, ellipse, arrow, highlighter, undo, erase, blank-screen sketch pads, and typing annotations.
 - Viewport screenshot copy/save and region snip copy/save.
 - OCR snip: select a screen region and copy its recognized text to the clipboard.
+- Laser pointer (Control+0): a glowing, click-through dot with a configurable color and fading trail that follows the mouse pointer over any app, during zoom and drawing, and in recordings and screen shares. Esc or the hotkey turns it off. It turns itself off after a configurable idle time.
 - Break timer with a configurable countdown, colors, opacity, background, and optional sound.
 - MP4 screen recording for the whole screen or a selected region, with optional system audio, microphone audio, and fixed webcam picture-in-picture.
 - Post-recording video editor with preview, trim, append, fades, playback controls, volume mute/slider, and export before save.

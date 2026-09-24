@@ -56,6 +56,10 @@ public enum SelfTestRunner {
         try testPanoramaEscapeCancel()
         try testIdleSleepAssertionLifecycle()
         try testStatusMenuOrderMatchesWindows()
+        try testLaserPointerTrailFades()
+        try testLaserPointerIdleAutoOff()
+        try testLaserPointerEscapePrecedence()
+        try testLaserPointerRecordingComposite()
         try testClipTransitionUpdatesOnChange()
         try testWebcamOverlayDragOrigin()
         try testTrimSavePreservesOriginal()
@@ -317,6 +321,11 @@ public enum SelfTestRunner {
         settings.webcamPosition = 1
         settings.webcamSize = 2
         settings.webcamShape = 3
+        settings.laserPointerHotKeyCode = 29
+        settings.laserPointerHotKeyModifiers = NSEvent.ModifierFlags([.control, .option]).rawValue
+        settings.laserPointerColorRGB = 0x00FF00
+        settings.laserPointerTrailMilliseconds = 0
+        settings.laserPointerIdleMinutes = 10
         store.save(settings)
 
         try expect(store.load() == settings, "Expected saved settings to round-trip through the store")
@@ -639,6 +648,90 @@ public enum SelfTestRunner {
         // Options must be first and Quit last, as on Windows.
         try expect(titles.first == "Settings…", "Expected Options/Settings to be the first menu item")
         try expect(titles.last == "Quit", "Expected Quit to be the last menu item")
+    }
+
+    /// The laser pointer trail keeps only recent samples, so it fades out
+    /// shortly after the pointer stops moving.
+    private static func testLaserPointerTrailFades() throws {
+        typealias Sample = LaserPointerView.TrailPoint
+        let lifetime: TimeInterval = 0.35
+        let trail = [
+            Sample(point: CGPoint(x: 0, y: 0), time: 10),
+            Sample(point: CGPoint(x: 5, y: 0), time: 10 + lifetime / 2),
+            Sample(point: CGPoint(x: 10, y: 0), time: 10 + lifetime)
+        ]
+        let pruned = LaserPointerController.prunedTrail(trail, now: 10 + lifetime + 0.01, lifetime: lifetime)
+        try expect(pruned == Array(trail.suffix(2)), "Expected samples older than the trail lifetime to be dropped, got \(pruned)")
+        try expect(LaserPointerController.prunedTrail(trail, now: 100, lifetime: lifetime).isEmpty,
+                   "Expected the whole trail to fade once the pointer has been still")
+        try expect(LaserPointerController.prunedTrail(trail, now: 10 + lifetime, lifetime: 1).count == 3,
+                   "Expected a longer trail setting to keep more samples")
+    }
+
+    /// Recorded zoom/draw frames get the laser drawn in at the right place:
+    /// AppKit screen coordinates mapped onto the image's pixels, then cropped
+    /// like a region recording.
+    private static func testLaserPointerRecordingComposite() throws {
+        // A 200x100 pt display at 2x, sitting to the right of the main display.
+        let screen = CGRect(x: 1000, y: 0, width: 200, height: 100)
+        guard let context = CGContext(data: nil, width: 400, height: 200, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue) else {
+            throw SelfTestError.failure("Could not create test context")
+        }
+        context.setFillColor(CGColor(srgbRed: 0, green: 0, blue: 1, alpha: 1))
+        context.fill(CGRect(x: 0, y: 0, width: 400, height: 200))
+        guard let background = context.makeImage() else { throw SelfTestError.failure("Could not create test image") }
+
+        // A red square at screen point (1150, 75): 150 pt from the left, 25 pt from the top.
+        let composited = LaserPointerController.composite(onto: background, imageScreenFrame: screen, layerScreenFrame: screen) { layer in
+            layer.setFillColor(CGColor(srgbRed: 1, green: 0, blue: 0, alpha: 1))
+            layer.fill(CGRect(x: 145, y: 70, width: 10, height: 10))
+        }
+        guard let composited else { throw SelfTestError.failure("Expected the laser to be composited onto the frame") }
+
+        func isRed(_ image: CGImage, x: Int, y: Int) -> Bool {
+            guard let data = image.dataProvider?.data, let bytes = CFDataGetBytePtr(data) else { return false }
+            let offset = y * image.bytesPerRow + x * 4 // BGRA, row 0 at the top
+            return bytes[offset + 2] > 200 && bytes[offset] < 50
+        }
+        try expect(isRed(composited, x: 300, y: 50), "Expected the laser at pixel (300, 50) of the full frame")
+        try expect(!isRed(composited, x: 100, y: 150), "Expected the rest of the frame unchanged")
+
+        // A region recording of the top-right quarter keeps the laser in view.
+        let crop = ModeCoordinator.cropRecordingFrame(composited, to: CGRect(x: 100, y: 0, width: 100, height: 50), pointWidth: screen.width)
+        guard let crop else { throw SelfTestError.failure("Expected a cropped frame") }
+        try expect(crop.width == 200 && crop.height == 100, "Expected a 200x100 px crop, got \(crop.width)x\(crop.height)")
+        try expect(isRed(crop, x: 100, y: 50), "Expected the laser at pixel (100, 50) of the region crop")
+
+        // A laser on another display is left out.
+        let elsewhere = LaserPointerController.composite(onto: background, imageScreenFrame: screen,
+                                                         layerScreenFrame: CGRect(x: 0, y: 0, width: 1000, height: 800)) { _ in }
+        try expect(elsewhere == nil, "Expected no composite when the laser is on another display")
+    }
+
+    /// Escape turns the laser pointer off, except while a ZoomIt mode that uses
+    /// Escape itself is on screen, where Escape exits that mode first.
+    private static func testLaserPointerEscapePrecedence() throws {
+        let turnsOff = ModeCoordinator.escapeTurnsOffLaserPointer
+        try expect(turnsOff(.idle, false, false), "Expected Esc to turn the laser off when no ZoomIt mode is active")
+        try expect(turnsOff(.recording, false, false), "Expected Esc to turn the laser off while recording")
+        for mode in [AppMode.staticZoom, .liveZoom, .drawOnly, .typing, .breakTimer] {
+            try expect(!turnsOff(mode, false, false), "Expected Esc to exit \(mode) and leave the laser on")
+        }
+        try expect(!turnsOff(.idle, true, false), "Expected Esc to cancel a snip and leave the laser on")
+        try expect(!turnsOff(.idle, false, true), "Expected Esc to cancel a panorama (selection, capture or stitching) and leave the laser on")
+    }
+
+    /// The laser pointer turns itself off after the configured idle time, and
+    /// never when idle auto-off is disabled.
+    private static func testLaserPointerIdleAutoOff() throws {
+        try expect(!LaserPointerController.hasIdledOut(lastMovement: 0, now: 299, timeout: 300),
+                   "Expected the pointer to stay on before the idle timeout")
+        try expect(LaserPointerController.hasIdledOut(lastMovement: 0, now: 300, timeout: 300),
+                   "Expected the pointer to turn off at the idle timeout")
+        try expect(!LaserPointerController.hasIdledOut(lastMovement: 0, now: 1_000_000, timeout: nil),
+                   "Expected the pointer to stay on when idle auto-off is set to Never")
     }
 
     /// Changing the clip transition popup from Fade to Black to Fade to White

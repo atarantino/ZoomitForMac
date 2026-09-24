@@ -18,6 +18,7 @@ struct SendableCGImage: @unchecked Sendable {
 /// back into itself.
 final class LiveCaptureSession: NSObject, SCStreamOutput, @unchecked Sendable {
     private var stream: SCStream?
+    private var captureDisplay: SCDisplay?
     private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
     private let sampleQueue = DispatchQueue(label: "com.zoomitmac.livecapture")
     private let frameHandler: @MainActor (CGImage) -> Void
@@ -52,10 +53,26 @@ final class LiveCaptureSession: NSObject, SCStreamOutput, @unchecked Sendable {
         configuration.queueDepth = 3
         configuration.minimumFrameInterval = CMTime(value: 1, timescale: 60)
 
+        self.captureDisplay = captureDisplay
         let stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: sampleQueue)
         try await stream.startCapture()
         self.stream = stream
+    }
+
+    /// Replaces the excluded windows on a running stream, for ZoomIt windows
+    /// that appear after live zoom started (the laser pointer).
+    @MainActor
+    func updateExcludedWindows(_ windowNumbers: [Int]) async throws {
+        guard let stream, let captureDisplay else { return }
+        // Look up all windows, not only on-screen ones: the laser pointer is
+        // still fully transparent at this point so it isn't captured before
+        // the filter changes, and ScreenCaptureKit doesn't count a transparent
+        // window as on screen.
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        let excludedWindowIDs = Set(windowNumbers.map { CGWindowID($0) })
+        let excluded = content.windows.filter { excludedWindowIDs.contains($0.windowID) }
+        try await stream.updateContentFilter(SCContentFilter(display: captureDisplay, excludingWindows: excluded))
     }
 
     func stop() async {

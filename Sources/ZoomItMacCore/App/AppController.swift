@@ -60,6 +60,10 @@ final class AppController: NSObject {
         modeCoordinator.handle(.toggleDemoMirror(scope: .screen))
     }
 
+    @objc func toggleLaserPointer() {
+        modeCoordinator.handle(.toggleLaserPointer)
+    }
+
     @objc func toggleBreakTimer() {
         modeCoordinator.handle(.toggleBreakTimer)
     }
