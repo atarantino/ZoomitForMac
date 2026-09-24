@@ -1629,7 +1629,15 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         laserPointerEscapeSettingsButton = escapeSettingsButton
         updateLaserPointerEscapeStatus()
 
-        let rows: [NSView] = [help, shortcutHelp, grid, idleHelp, escapeStatus, escapeSettingsButton]
+        var rows: [NSView] = [help, shortcutHelp, grid, idleHelp, escapeStatus, escapeSettingsButton]
+        if LaserPointerCursorHider.isSupported {
+            let hideCursorCheck = makeCheckbox(
+                "Hide mouse pointer:",
+                action: #selector(laserPointerHidesCursorChanged(_:)),
+                state: settings.laserPointerHidesCursor
+            )
+            rows.append(hideCursorCheck)
+        }
         return makeColumn(rows)
     }
 
@@ -1689,6 +1697,11 @@ final class SettingsWindowController: NSObject, NSWindowDelegate, NSTableViewDat
         if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
             NSWorkspace.shared.open(url)
         }
+    }
+
+    @objc private func laserPointerHidesCursorChanged(_ sender: NSButton) {
+        settings.laserPointerHidesCursor = (sender.state == .on)
+        persist()
     }
 
     @objc private func laserPointerIdleChanged(_ sender: NSPopUpButton) {

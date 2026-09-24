@@ -60,6 +60,7 @@ public enum SelfTestRunner {
         try testLaserPointerIdleAutoOff()
         try testLaserPointerEscapePrecedence()
         try testLaserPointerRecordingComposite()
+        try testLaserPointerCursorHidingIsHomebrewOnly()
         try testClipTransitionUpdatesOnChange()
         try testWebcamOverlayDragOrigin()
         try testTrimSavePreservesOriginal()
@@ -326,6 +327,7 @@ public enum SelfTestRunner {
         settings.laserPointerColorRGB = 0x00FF00
         settings.laserPointerTrailMilliseconds = 0
         settings.laserPointerIdleMinutes = 10
+        settings.laserPointerHidesCursor = false
         store.save(settings)
 
         try expect(store.load() == settings, "Expected saved settings to round-trip through the store")
@@ -666,6 +668,18 @@ public enum SelfTestRunner {
                    "Expected the whole trail to fade once the pointer has been still")
         try expect(LaserPointerController.prunedTrail(trail, now: 10 + lifetime, lifetime: 1).count == 3,
                    "Expected a longer trail setting to keep more samples")
+    }
+
+    /// Hiding the cursor in the background relies on private API, which must be
+    /// compiled out of the App Store build.
+    private static func testLaserPointerCursorHidingIsHomebrewOnly() throws {
+        if DistributionChannel.isAppStore {
+            try expect(!LaserPointerCursorHider.isSupported,
+                       "Expected background cursor hiding to be unavailable in the App Store build")
+        } else {
+            try expect(LaserPointerCursorHider.isSupported,
+                       "Expected background cursor hiding to resolve its WindowServer functions")
+        }
     }
 
     /// Recorded zoom/draw frames get the laser drawn in at the right place:

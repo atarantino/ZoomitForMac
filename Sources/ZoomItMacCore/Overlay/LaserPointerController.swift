@@ -13,6 +13,7 @@ final class LaserPointerController {
     private var window: NSWindow?
     private var pointerView: LaserPointerView?
     private var timer: Timer?
+    private let cursorHider = LaserPointerCursorHider()
     /// Seconds without mouse movement before the pointer turns itself off, or
     /// nil to stay on until toggled.
     private var idleTimeout: TimeInterval?
@@ -103,6 +104,9 @@ final class LaserPointerController {
         } else {
             window.orderFrontRegardless()
         }
+        if settings.laserPointerHidesCursor {
+            cursorHider.hide()
+        }
 
         let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.tick() }
@@ -114,6 +118,7 @@ final class LaserPointerController {
 
     func stop() {
         removeEscapeMonitor()
+        cursorHider.show()
         timer?.invalidate()
         timer = nil
         window?.orderOut(nil)
@@ -224,6 +229,8 @@ final class LaserPointerController {
             window.setFrame(screen.frame, display: false)
             pointerView.resetTrail()
         }
+
+        cursorHider.reassertIfNeeded()
 
         let local = CGPoint(x: mouse.x - window.frame.minX, y: mouse.y - window.frame.minY)
         pointerView.update(pointer: local, now: now)

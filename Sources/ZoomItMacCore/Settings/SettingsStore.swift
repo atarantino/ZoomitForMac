@@ -79,6 +79,9 @@ struct AppSettings: Equatable {
     /// Minutes without mouse movement after which the laser pointer turns
     /// itself off. 0 keeps it on until the hotkey is pressed again.
     var laserPointerIdleMinutes: Int
+    /// Whether the system mouse pointer is hidden while the laser pointer is
+    /// on. Not offered in the App Store build, which can't hide it.
+    var laserPointerHidesCursor: Bool
     /// Break timer duration in whole minutes, matching ZoomIt's options dialog.
     var breakDurationMinutes: Int
     /// Break timer text and solid background colors as 0xRRGGBB values.
@@ -186,6 +189,7 @@ struct AppSettings: Equatable {
         laserPointerColorRGB: 0xFF0000,
         laserPointerTrailMilliseconds: 350,
         laserPointerIdleMinutes: 5,
+        laserPointerHidesCursor: true,
         breakDurationMinutes: 10,
         breakTextColorRGB: 0xFF0000,
         breakBackgroundColorRGB: 0xFFFFFF,
@@ -257,6 +261,7 @@ final class UserDefaultsSettingsStore: SettingsStore {
         static let laserPointerColorRGB = "laserPointerColorRGB"
         static let laserPointerTrailMilliseconds = "laserPointerTrailMilliseconds"
         static let laserPointerIdleMinutes = "laserPointerIdleMinutes"
+        static let laserPointerHidesCursor = "laserPointerHidesCursor"
         static let breakDurationMinutes = "breakDurationMinutes"
         static let breakTextColorRGB = "breakTextColorRGB"
         static let breakBackgroundColorRGB = "breakBackgroundColorRGB"
@@ -478,6 +483,10 @@ final class UserDefaultsSettingsStore: SettingsStore {
             settings.laserPointerIdleMinutes = defaults.integer(forKey: Key.laserPointerIdleMinutes)
         }
 
+        if defaults.object(forKey: Key.laserPointerHidesCursor) != nil {
+            settings.laserPointerHidesCursor = defaults.bool(forKey: Key.laserPointerHidesCursor)
+        }
+
         if defaults.object(forKey: Key.breakTextColorRGB) != nil {
             settings.breakTextColorRGB = UInt32(defaults.integer(forKey: Key.breakTextColorRGB))
         }
@@ -608,6 +617,7 @@ final class UserDefaultsSettingsStore: SettingsStore {
         defaults.set(Int(settings.laserPointerColorRGB), forKey: Key.laserPointerColorRGB)
         defaults.set(settings.laserPointerTrailMilliseconds, forKey: Key.laserPointerTrailMilliseconds)
         defaults.set(settings.laserPointerIdleMinutes, forKey: Key.laserPointerIdleMinutes)
+        defaults.set(settings.laserPointerHidesCursor, forKey: Key.laserPointerHidesCursor)
         defaults.set(settings.breakDurationMinutes, forKey: Key.breakDurationMinutes)
         defaults.set(Int(settings.breakTextColorRGB), forKey: Key.breakTextColorRGB)
         defaults.set(Int(settings.breakBackgroundColorRGB), forKey: Key.breakBackgroundColorRGB)
